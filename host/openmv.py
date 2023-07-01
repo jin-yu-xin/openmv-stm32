@@ -9,13 +9,13 @@ from pyb import Pin
 uart = UART(3, 19200)
 pan_servo = Servo(1)
 tilt_servo = Servo(2)
-p_in1 = Pin('P1', Pin.IN,Pin.PULL_UP)
+p_in1 = Pin('P1', Pin.IN, Pin.PULL_UP)
 Det_Mode = 1
 target = 0
 target_ball = 0
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
-sensor.set_framesize(sensor.QQVGA)
+sensor.set_framesize(sensor.QQVGA) # 图像分辨率160x120
 sensor.skip_frames(10)
 sensor.set_auto_whitebal(False)
 clock = time.clock()
@@ -79,7 +79,7 @@ def get_suit_window(d_0, l_0, dalta_d, orignal):
                int(pixel_length), int(h)]
     return rec_owm
 def get_triangle_pixel(d_0, l_0, dalta_d):
-    pixelm = d_0*l_0 / (d_0 + dalta_d)
+    pixelm = d_0*l_0 / (d_0 + dalta_d)  # 白板移动dalta_d后再图像中的像素长度
     tri_pixel = pixelm * 0.354
     return tri_pixel
 def is_triangle(line_list, l_triangle):
@@ -91,6 +91,7 @@ def is_triangle(line_list, l_triangle):
         else:
             pass
     better_candinate_line = []
+    # 所有检测到的直线进行两两配对 判断是否为同一个三角形的两个边
     for i in range(0, len(candinate_list)):
         for j in range(i+1, len(candinate_list)):
             x_0 = (candinate_list[i][0] + candinate_list[i][2])/2.0
@@ -99,6 +100,7 @@ def is_triangle(line_list, l_triangle):
             y_1 = (candinate_list[j][1] + candinate_list[j][3])/2.0
             distance = math.sqrt((x_1 - x_0)*(x_1 - x_0) +
                                  (y_1 - y_0)*(y_1 - y_0))
+            # 根据两边中点的距离是否在规定范围内判断是否为同一个等边三角形的两边
             if(distance > (l_triangle - tolorence)/2.0 and distance < (l_triangle + tolorence)/2.0):
                 better_candinate_line.append(candinate_list[i])
                 better_candinate_line.append(candinate_list[j])
@@ -122,12 +124,15 @@ def calculate_triangle_center(ideal_line):
     if(len(center) >= 3):
         for i in range(0, len(center)):
             for j in range(i+1, len(center)):
+                # 两边中点横坐标的距离或纵坐标的距离要满足大于dis_tolorance 两点横纵坐标距离太近认为无法构成等边三角形
                 if(abs(center[i][0]-center[j][0]) > dis_tolorance or abs(center[i][1]-center[j][1]) > dis_tolorance):
                     if(len(real_center) != 2):
                         real_center.append(center[i])
                         real_center.append(center[j])
+    # real_center 存储等边三角形其中两条边的中点坐标
     print(real_center)
     if(len(real_center) == 2):
+        # 根据两条边的中点坐标求等边三角形的中心点坐标
         center_point = [(real_center[0][0]+real_center[1][0]) /
                         2.0, (real_center[0][1]+real_center[1][1])/2.0]
         center_point = [int(center_point[0]), int(center_point[1])]
@@ -144,10 +149,10 @@ def cir_det(img):
         img.draw_circle(circle_1.x(), circle_1.y(), circle_1.r(),
                         color=(255, 0, 0))
         img.draw_cross(circle_1.x(), circle_1.y())
-    if circle_1 and Det_Mode == 1:
+    if circle_1 and Det_Mode == 1:  # 检测平面标准圆
         print('circle_1 done')
         return 1
-    elif circle_1 and Det_Mode == 2:
+    elif circle_1 and Det_Mode == 2: # 检测球体
         target_ball = ball_det(circle_1)
         return 1
 rectangle_1 = 0
@@ -166,7 +171,7 @@ def tri_det(img, rec):
     img.draw_rectangle(rec)
     rec = [rec[0]-2, rec[1]-2, rec[2]-4, rec[3]-4]
     checked_line = img.find_line_segments(
-        rec, merge_distance=10, max_theta_diff=20)
+        rec, merge_distance=10, max_theta_diff=20)  # 在感兴趣的rec范围内使用霍夫变换来查找线段
     line_first_check = choose_correct_line(d_0, l_0, dalta_d, checked_line)
     if(len(line_first_check) >= 1 and len(ideal_line) < 3):
         for i in line_first_check:
@@ -197,7 +202,7 @@ def target_choose(key, img, rec):
 def target_choose2(key, img, rec):
     t = 0
     t = cir_det(img)
-    threshold = (20,50)
+    threshold = (20,50) # Lab 这里只设置L（明度）的范围20~50
     if t:
         uart.write("A"+str(get_uart_data(uart)-30)+",C"+str(0)+",BBasketBall,D"+str(0)+\
                    ",E" + str(0) + ",\r\n")
@@ -254,10 +259,16 @@ def calibration_laser_light(d_0, l_0, dalta_d, oringin):
     angle_y = math.atan(yr / math.sqrt(L * L + xr * xr)) / 3.1415 * 180
     angle = [angle_x, angle_y]
     return angle
+# 用于标定
 oringin = [80, 50]
-d_0 = 1.905
-l_0 = 66
-dalta_d = 0
+d_0 = 1.905 # 最初将白板放置在距离摄像头d_0的距离处  
+l_0 = 66 # 白板距摄像头d_0时 在图像中的像素长度
+dalta_d = 0 # 白板前后移动的距离
+# 假设白板实际长度为H米 摄像头的焦距为f 则：
+# l_0/H = f/d_0
+# 白板移动dalta_d后：l_1/H = f/(d_0 + dalta_d)
+# 两等式相处得到：
+# l_1 = l_0 * d_0 / (d_0 + dalta_d) 即可计算出白板移动后在图像中的像素长度
 def angle_cal(k, shape):
     global d_0
     global oringin
@@ -328,13 +339,13 @@ while (True):
             Det_Mode = 0
     u_data = 0
     clock.tick()
-    img = sensor.snapshot().lens_corr(1.8)
+    img = sensor.snapshot().lens_corr(1.8) # 畸变矫正 去除图像鱼眼效果
     target_x = 0
-    if Det_Mode == 1:
-        target_x = target_choose(1, img, rec)
+    if Det_Mode == 1: # 检测平面几何
+        target_x = target_choose(1, img, rec) # 按照圆、三角形、矩形的顺序进行检测（按照检测的难易程度）
         if target_x != None:
             target_list.append(target_x)
-    elif Det_Mode == 2:
+    elif Det_Mode == 2: # 检测球体 篮球、足球、排球
         target_x = target_choose2(1, img, rec)
         if target_x:
             final_target = 0
@@ -343,7 +354,7 @@ while (True):
     if len(target_list) > 7:
         final_target = grade_mode(target_list)
         final_target = final_target[0]
-    if final_target == 1:
+    if final_target == 1:  # 被检测出数量最多的物体形状 1：圆形
         if circle_1:
             k = circle_1[2]*2/24.0
             if(circle_1[2]*2 < 12):
@@ -379,7 +390,7 @@ while (True):
             uart = UART(3, 19200)
             uart.write("A"+str(real_mess[2]*100)+",C"+str(real_mess[4]*100)+",Bcircle,D"+str(real_mess[0]*100) +
                        ",E" + str(real_mess[1]*100) + ",\r\n")
-    elif final_target == 3:
+    elif final_target == 3: # 矩形
         if rectangle_1:
             if(isinstance(rectangle_1 ,int)):
                 pass
@@ -422,7 +433,7 @@ while (True):
                 img.draw_rectangle(rectangle_1.rect(), color=(0, 255, 0))
                 uart.write("A"+str(real_mess[2]*100)+",C"+str(real_mess[4]*100)+",Brectangle,D"+str(real_mess[0]*100) +
                            ",E" + str(real_mess[1]*100) + ",\r\n")
-    elif final_target == 2:
+    elif final_target == 2: # 三角形
         real_mess = [0, 0, 0, 0, 0]
         k = 1
         if  len(ideal_line)>=3 :
